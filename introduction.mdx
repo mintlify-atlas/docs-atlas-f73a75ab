@@ -16,7 +16,7 @@ Social Media Backend is a RESTful API built with FastAPI and PostgreSQL that pro
     Register new accounts with `POST /users/` and retrieve any user's public profile by ID with `GET /users/{id}`. Passwords are always stored as bcrypt hashes — never in plain text.
   </Card>
   <Card title="Posts" icon="newspaper" href="/api-reference/posts">
-    Create, read, update, and delete posts. All list and single-post responses include an aggregated vote count. Posts support full-text search, pagination via `limit` and `skip`, and keyword filtering via `search`.
+    Create, read, update, and delete posts. All list and single-post responses include an aggregated vote count. Posts support pagination via `limit` and `skip`, and keyword filtering via `search`.
   </Card>
   <Card title="Votes" icon="thumbs-up" href="/api-reference/votes">
     Cast or retract a vote on any post with `POST /vote`. Set `dir: 1` to add a vote and `dir: 0` to remove it. Each user may hold at most one vote per post.
@@ -86,7 +86,7 @@ app.include_router(vote.router)
 ## Authentication requirement
 
 <Note>
-  All endpoints **except** `POST /login` and `POST /users/` require a valid JWT Bearer token in the `Authorization` header. Tokens are obtained by calling `POST /login` with your email and password. Requests without a valid token receive a `403 Forbidden` response.
+  All endpoints **except** `POST /login` and `POST /users/` require a valid JWT Bearer token in the `Authorization` header. Tokens are obtained by calling `POST /login` with your email and password. Requests with a missing or invalid token receive a `401 Unauthorized` response.
 
   ```
   Authorization: Bearer <your_access_token>

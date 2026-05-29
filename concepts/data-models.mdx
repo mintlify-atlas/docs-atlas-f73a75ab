@@ -1,7 +1,7 @@
 ---
 title: "Data models: Post, User, and Vote in Social Media Backend"
 sidebarTitle: "Data Models"
-description: "The three core SQLAlchemy ORM models — Post, User, and Vote — their columns, relationships, and corresponding Pydantic schemas for request/response validation."
+description: "The three SQLAlchemy ORM models — Post, User, Vote — their columns, relationships, and Pydantic schemas for request and response validation."
 ---
 
 The API is built around three database tables — `posts`, `users`, and `votes` — each defined as a SQLAlchemy ORM model that maps directly to a PostgreSQL table. Alongside each ORM model there are one or more Pydantic schemas that govern what data is accepted in request bodies and what is returned in responses. This two-layer approach (ORM for persistence, Pydantic for the API boundary) ensures that internal implementation details such as hashed passwords never leak to API consumers.
@@ -211,11 +211,31 @@ class Vote(BaseModel):
     dir: Annotated[int, Field(le=1)]
 ```
 
-`dir` is constrained to be at most `1` by the `Field(le=1)` annotation. Combined with standard integer validation (minimum `0`), only the values `0` and `1` are accepted.
+`dir` is constrained to be at most `1` by the `Field(le=1)` annotation. No lower-bound constraint is declared in the schema — the route handler logic treats `dir=1` as a vote cast and any other value as a vote retraction.
 
 <Tip>
   Send `dir=1` to cast a vote and `dir=0` to retract an existing vote. Attempting to vote on a post you have already voted on (or retract a vote that doesn't exist) will return a `409 Conflict` or `404 Not Found` from the route handler.
 </Tip>
+
+## Auth schemas
+
+Two additional Pydantic schemas support the authentication flow. `Token` is the response model returned by `POST /login`, and `TokenData` carries the decoded `user_id` claim extracted from a verified JWT.
+
+```python
+from pydantic import BaseModel
+from typing import Optional
+
+
+class Token(BaseModel):
+    access_token: str
+    token_type: str
+
+
+class TokenData(BaseModel):
+    id: Optional[int] = None
+```
+
+`Token` is returned directly from the login endpoint after successful credential verification. `TokenData` is used internally by `verify_access_token()` to pass the extracted `user_id` back to `get_current_user()` — it is never serialised into an API response.
 
 ## Schema hierarchy
 
@@ -232,6 +252,9 @@ PostBase            (title + content + published)
             └── PostOut  (Post + vote count)     ← list post response
 
 Vote                (post_id + dir)              ← POST /vote/ body
+
+Token               (access_token + token_type)  ← POST /login response
+TokenData           (id)                         ← internal JWT claim holder
 ```
 
 <Note>

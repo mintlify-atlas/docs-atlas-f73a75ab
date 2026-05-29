@@ -1,5 +1,5 @@
 ---
-title: "Deploy Social Media Backend to Render.com"
+title: "Deploy Social Media Backend to Render.com with Blueprint"
 sidebarTitle: "Render Deployment"
 description: "Deploy the Social Media Backend API and a managed PostgreSQL database to Render.com using the included render.yaml Blueprint configuration file."
 ---
@@ -57,7 +57,7 @@ Provisions a Python web service with:
 The `fromDatabase` directive automatically injects the PostgreSQL connection string from `fastapi-db` into the `DATABASE_URL` environment variable of the web service. Render resolves this at deploy time, so there is no need to copy and paste connection strings manually.
 
 <Note>
-  The application's `app/database.py` constructs its SQLAlchemy URL from individual `DATABASE_*` variables, not from `DATABASE_URL`. After deployment you will need to supply those individual variables (see step 6 below), or adapt `database.py` to read from `DATABASE_URL` directly.
+  The application's `app/database.py` constructs its SQLAlchemy URL from individual `DATABASE_*` variables (`DATABASE_HOSTNAME`, `DATABASE_PORT`, `DATABASE_USERNAME`, `DATABASE_PASSWORD`, `DATABASE_NAME`), not from `DATABASE_URL`. After deployment you will need to supply those individual variables (see step 6 below).
 </Note>
 
 ## Deployment steps
@@ -93,7 +93,7 @@ The `fromDatabase` directive automatically injects the PostgreSQL connection str
   </Step>
 
   <Step title="Set additional environment variables">
-    The Blueprint wires `DATABASE_URL` automatically, but the following variables must be added manually in the Render dashboard under **Environment** for the `fastapi-tutorial` service:
+    The Blueprint wires `DATABASE_URL` automatically, but the application reads individual `DATABASE_*` variables. Add the following manually in the Render dashboard under **Environment** for the `fastapi-tutorial` service:
 
     | Variable | Example value | Description |
     |---|---|---|

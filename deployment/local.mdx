@@ -1,7 +1,7 @@
 ---
-title: "Run Social Media Backend locally for development"
+title: "Run Social Media Backend locally for development setup"
 sidebarTitle: "Local Setup"
-description: "Set up the Social Media Backend on your local machine with PostgreSQL, configure environment variables, run Alembic migrations, and start the Uvicorn development server."
+description: "Set up the Social Media Backend on your local machine with PostgreSQL, configure environment variables, run Alembic migrations, and start the dev server."
 ---
 
 Running the Social Media Backend locally gives you a full development environment with hot-reload, interactive API docs, and direct access to your PostgreSQL database. This guide walks you through every step, from cloning the repository to verifying your first successful response.
@@ -28,6 +28,8 @@ Before you begin, make sure you have the following installed and available on yo
     git clone https://github.com/pvnm4/Social-Media-Backend.git
     cd Social-Media-Backend/Social-Media-Backend
     ```
+
+    The repository uses a nested directory structure — the actual application code and `pyproject.toml` live inside the inner `Social-Media-Backend/` folder. All subsequent commands must be run from this inner directory.
   </Step>
 
   <Step title="Create a virtual environment and install dependencies">
@@ -39,14 +41,8 @@ Before you begin, make sure you have the following installed and available on yo
 
     This reads `pyproject.toml` and installs all declared dependencies — including FastAPI, SQLAlchemy, Alembic, Uvicorn, passlib, PyJWT, psycopg2, and pydantic-settings — into an isolated virtual environment automatically.
 
-    **With pip (alternative):**
-
-    ```bash
-    pip install -r requirements.txt
-    ```
-
     <Note>
-      The project's canonical dependency list lives in `pyproject.toml`. If you use pip, make sure your `requirements.txt` is kept in sync with those pinned versions.
+      The project's canonical dependency list lives in `pyproject.toml`. Dependencies include `fastapi`, `sqlalchemy`, `alembic`, `uvicorn`, `psycopg2`, `pydantic[email]`, `pydantic-settings`, `passlib[bcrypt]`, `python-multipart`, `bcrypt`, and `pyjwt`.
     </Note>
   </Step>
 

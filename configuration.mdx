@@ -33,15 +33,11 @@ ACCESS_TOKEN_EXPIRE_MINUTES=60
 
 ### Database connection
 
-The application constructs the SQLAlchemy connection URL internally as:
+The application constructs the SQLAlchemy connection URL internally from the five individual database variables below. There is no `DATABASE_URL` variable in the `Settings` class — do not set one in your `.env` file.
 
 ```
 postgresql://{DATABASE_USERNAME}:{DATABASE_PASSWORD}@{DATABASE_HOSTNAME}:{DATABASE_PORT}/{DATABASE_NAME}
 ```
-
-<Note>
-  You do **not** set a `DATABASE_URL` variable directly when running locally. The URL is assembled automatically from the five individual database variables below. (On Render, `DATABASE_URL` is injected as a platform variable and takes a different code path — this only applies to the hosted deployment.)
-</Note>
 
 <ParamField env="DATABASE_HOSTNAME" type="string" required>
   Hostname or IP address of the PostgreSQL server. Use `localhost` for a local instance or the hostname provided by your managed database service (e.g. Render, Supabase, or AWS RDS).

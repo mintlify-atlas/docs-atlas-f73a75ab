@@ -1,7 +1,7 @@
 ---
-title: "POST /posts/ — create a new post"
-sidebarTitle: "POST /posts/"
-description: "POST /posts/ creates a new post owned by the authenticated user. Accepts title, content, and published flag. Returns the created post. Requires JWT authentication."
+title: "POST /posts/ — create a new post with owner assignment"
+sidebarTitle: "Create Post"
+description: "POST /posts/ creates a new post owned by the authenticated user. Provide title, content, and optional published flag. Owner is assigned from the JWT token."
 ---
 
 The `POST /posts/` endpoint creates a new post and automatically associates it with the currently authenticated user. The `owner_id` field is derived directly from the JWT token — it cannot be set or overridden in the request body. A valid Bearer token must be included with every request.

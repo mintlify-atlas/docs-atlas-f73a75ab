@@ -1,7 +1,7 @@
 ---
-title: "JWT authentication in Social Media Backend"
+title: "JWT authentication flow in the Social Media Backend"
 sidebarTitle: "Authentication"
-description: "Social Media Backend uses OAuth2 password flow with JWT bearer tokens. Learn how to obtain a token, how it is verified, and which endpoints require authentication."
+description: "Social Media Backend uses OAuth2 password flow with JWT bearer tokens. Learn how to obtain a token, verify it, and which endpoints require authentication."
 ---
 
 The Social Media Backend secures its endpoints with the OAuth2 password grant flow backed by JSON Web Tokens. A client first exchanges a valid email and password for a short-lived JWT access token; every subsequent request to a protected endpoint must present that token in the `Authorization: Bearer <token>` HTTP header. The server validates the token on every request without maintaining session state — making the API fully stateless and horizontally scalable.

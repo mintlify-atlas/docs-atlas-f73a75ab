@@ -1,7 +1,7 @@
 ---
-title: "PUT /posts/{id} — update a post by ID"
-sidebarTitle: "PUT /posts/{id}"
-description: "PUT /posts/{id} replaces all fields of an existing post. Only the post owner can update it. Requires JWT authentication and returns the updated post."
+title: "PUT /posts/{id} — replace an existing post by its ID"
+sidebarTitle: "Update Post"
+description: "PUT /posts/{id} replaces all fields of an existing post owned by the caller. Only the post owner may update it. Requires a valid JWT Bearer token."
 ---
 
 The `PUT /posts/{id}` endpoint fully replaces the content of an existing post. Because this is a `PUT` (not `PATCH`), all fields must be provided — omitting a field resets it to its default value. Only the user who originally created the post can update it; attempting to update a post owned by another user returns a `403 Forbidden` error.
@@ -81,8 +81,8 @@ PUT /posts/{id}
 | Status Code | Description |
 |-------------|-------------|
 | `401 Unauthorized` | No token was provided or the token is invalid/expired. |
-| `403 Forbidden` | The authenticated user is not the owner of this post. |
-| `404 Not Found` | No post with the specified `id` exists. |
+| `403 Forbidden` | The authenticated user is not the owner of this post. Message: `"Not authorized to perform requested action"`. |
+| `404 Not Found` | No post with the specified `id` exists. Message: `"Post with the id:{id} does not exists"`. |
 | `422 Unprocessable Entity` | The request body is missing required fields or contains invalid values. |
 
 ## Examples
@@ -148,6 +148,22 @@ print(response.json())
     "email": "alice@example.com",
     "created_at": "2024-01-01T08:00:00.000000Z"
   }
+}
+```
+
+### 403 Forbidden Response Example
+
+```json
+{
+  "detail": "Not authorized to perform requested action"
+}
+```
+
+### 404 Not Found Response Example
+
+```json
+{
+  "detail": "Post with the id:42 does not exists"
 }
 ```
 

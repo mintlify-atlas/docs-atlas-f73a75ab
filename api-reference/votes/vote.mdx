@@ -1,6 +1,6 @@
 ---
-title: "POST /vote/ — vote or unvote on a post"
-sidebarTitle: "POST /vote/"
+title: "POST /vote/ — Add or Remove a User Vote on a Post"
+sidebarTitle: "Vote"
 description: "POST /vote/ adds or removes the authenticated user's vote on a post. Set dir=1 to vote, dir=0 to remove your vote. Requires JWT authentication."
 ---
 
@@ -69,11 +69,12 @@ When removing a vote (`dir: 0`):
 
 ## Error responses
 
-| Status | Condition |
-|--------|-----------|
-| `401 Unauthorized` | Missing or invalid JWT token. |
-| `404 Not Found` | The target post does not exist, **or** (when `dir: 0`) the authenticated user has not voted on this post. |
-| `409 Conflict` | The authenticated user has already voted on this post (when `dir: 1`). |
+| Status | Condition | Detail Message |
+|--------|-----------|----------------|
+| `401 Unauthorized` | Missing or invalid JWT token. | *(FastAPI/OAuth2 default)* |
+| `404 Not Found` | The target post does not exist. | `"Post with id: {post_id} doss not exist."` |
+| `404 Not Found` | `dir: 0` — the authenticated user has not voted on this post. | `"vode does not exist"` |
+| `409 Conflict` | `dir: 1` — the authenticated user has already voted on this post. | `"User {user_id} has already voted on the post {post_id}"` |
 
 ---
 

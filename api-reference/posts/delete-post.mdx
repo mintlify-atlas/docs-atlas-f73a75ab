@@ -1,7 +1,7 @@
 ---
-title: "DELETE /posts/{id} — delete a post by ID"
-sidebarTitle: "DELETE /posts/{id}"
-description: "DELETE /posts/{id} permanently removes a post and all its votes. Only the post owner can delete it. Returns HTTP 204 No Content on success."
+title: "DELETE /posts/{id} — remove a post and its votes by ID"
+sidebarTitle: "Delete Post"
+description: "DELETE /posts/{id} permanently removes a post and its votes from the database. Only the post owner may delete it. Returns HTTP 204 No Content on success."
 ---
 
 The `DELETE /posts/{id}` endpoint permanently removes a post from the database along with all of its associated votes via cascade deletion. This action is irreversible — once deleted, the post and its vote history cannot be recovered. Only the user who created the post is permitted to delete it; any other authenticated user who attempts to do so will receive a `403 Forbidden` response.
@@ -30,7 +30,7 @@ DELETE /posts/{id}
 |-------------|-------------|
 | `401 Unauthorized` | No token was provided or the token is invalid/expired. |
 | `403 Forbidden` | The authenticated user is not the owner of this post. |
-| `404 Not Found` | No post with the specified `id` exists. |
+| `404 Not Found` | No post with the specified `id` exists. Message: `"Post with the id:{id} was not found"`. |
 
 ## Examples
 
@@ -63,6 +63,14 @@ else:
 ```
 
 </CodeGroup>
+
+### 404 Not Found Response Example
+
+```json
+{
+  "detail": "Post with the id:42 was not found"
+}
+```
 
 <Warning>
   Deletion is **permanent and cannot be undone**. All votes associated with the post are cascade-deleted along with it. Ensure you have confirmed the correct `id` before making this request.

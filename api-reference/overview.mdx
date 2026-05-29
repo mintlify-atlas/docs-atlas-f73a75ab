@@ -1,7 +1,7 @@
 ---
-title: "Social Media Backend REST API reference overview"
+title: "Social Media Backend REST API: Complete Reference Overview"
 sidebarTitle: "Overview"
-description: "Base URL, authentication scheme, request/response formats, and common error codes for the Social Media Backend REST API."
+description: "Complete reference for the Social Media Backend REST API: base URL, authentication scheme, request and response formats, and common error codes."
 ---
 
 The Social Media Backend exposes a RESTful HTTP API built with FastAPI and backed by PostgreSQL. Every endpoint returns JSON, and every request body must be JSON (with `Content-Type: application/json`) — with one exception: `POST /login` accepts form-encoded credentials following the OAuth2 password flow. Most endpoints require a JWT Bearer token obtained from `POST /login`; a small number of read/registration endpoints are publicly accessible without authentication.

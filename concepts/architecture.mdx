@@ -1,7 +1,7 @@
 ---
 title: "Social Media Backend architecture and request lifecycle"
 sidebarTitle: "Architecture"
-description: "How the Social Media Backend layers FastAPI routers, SQLAlchemy ORM, and Pydantic schemas together — and how a request flows from HTTP to database and back."
+description: "How the Social Media Backend layers FastAPI routers, SQLAlchemy ORM, and Pydantic v2 schemas together — and how a request flows from HTTP to the database."
 ---
 
 The Social Media Backend is built as a clean, layered REST API that separates concerns across five distinct levels: the HTTP transport (Uvicorn), the web framework (FastAPI), authentication middleware (OAuth2PasswordBearer), data validation (Pydantic v2), and database access (SQLAlchemy ORM over PostgreSQL). Each layer has a single responsibility, making the codebase straightforward to extend and test in isolation. Alembic sits alongside the ORM layer to version-control schema changes without requiring manual SQL migrations.
