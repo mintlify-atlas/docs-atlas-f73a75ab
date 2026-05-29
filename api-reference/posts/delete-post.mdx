@@ -1,0 +1,69 @@
+---
+title: "DELETE /posts/{id} — delete a post by ID"
+sidebarTitle: "DELETE /posts/{id}"
+description: "DELETE /posts/{id} permanently removes a post and all its votes. Only the post owner can delete it. Returns HTTP 204 No Content on success."
+---
+
+The `DELETE /posts/{id}` endpoint permanently removes a post from the database along with all of its associated votes via cascade deletion. This action is irreversible — once deleted, the post and its vote history cannot be recovered. Only the user who created the post is permitted to delete it; any other authenticated user who attempts to do so will receive a `403 Forbidden` response.
+
+## Endpoint
+
+```
+DELETE /posts/{id}
+```
+
+**Authentication required** — include a Bearer token in the `Authorization` header.
+
+## Path Parameters
+
+<ParamField path="id" type="integer" required>
+  The unique numeric identifier of the post to delete.
+</ParamField>
+
+## Response
+
+**HTTP 204 No Content** — The post was successfully deleted. The response body is empty.
+
+## Error Responses
+
+| Status Code | Description |
+|-------------|-------------|
+| `401 Unauthorized` | No token was provided or the token is invalid/expired. |
+| `403 Forbidden` | The authenticated user is not the owner of this post. |
+| `404 Not Found` | No post with the specified `id` exists. |
+
+## Examples
+
+<CodeGroup>
+
+```bash cURL
+# Delete post with ID 42
+curl -X DELETE http://localhost:8000/posts/42 \
+  -H "Authorization: Bearer TOKEN"
+
+# Check the response status (expect 204)
+curl -o /dev/null -s -w "%{http_code}\n" \
+  -X DELETE http://localhost:8000/posts/42 \
+  -H "Authorization: Bearer TOKEN"
+```
+
+```python Python
+import requests
+
+BASE_URL = "http://localhost:8000"
+HEADERS = {"Authorization": "Bearer TOKEN"}
+
+post_id = 42
+response = requests.delete(f"{BASE_URL}/posts/{post_id}", headers=HEADERS)
+
+if response.status_code == 204:
+    print("Post deleted successfully.")
+else:
+    print(response.status_code, response.json())
+```
+
+</CodeGroup>
+
+<Warning>
+  Deletion is **permanent and cannot be undone**. All votes associated with the post are cascade-deleted along with it. Ensure you have confirmed the correct `id` before making this request.
+</Warning>

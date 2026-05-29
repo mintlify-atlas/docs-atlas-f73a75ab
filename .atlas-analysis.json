@@ -1,23 +1,11 @@
 {
-  "$schema": "https://mintlify.com/docs.json",
-  "name": "Social Media Backend",
+  "projectType": "api-service",
+  "projectName": "Social Media Backend",
+  "projectDescription": "A RESTful backend API for a social media platform built with FastAPI, PostgreSQL, and SQLAlchemy, supporting user authentication, post management, and a voting system.",
   "theme": "luma",
-  "colors": {
-    "primary": "#6366F1",
-    "light": "#818CF8",
-    "dark": "#4338CA"
-  },
-  "navbar": {
-    "primary": {
-      "type": "github",
-      "href": "https://github.com/pvnm4/Social-Media-Backend"
-    }
-  },
-  "footer": {
-    "socials": {
-      "github": "https://github.com/pvnm4/Social-Media-Backend"
-    }
-  },
+  "primaryColor": "#6366F1",
+  "lightColor": "#818CF8",
+  "darkColor": "#4338CA",
   "navigation": {
     "tabs": [
       {
@@ -90,5 +78,28 @@
         ]
       }
     ]
-  }
+  },
+  "keyFeatures": [
+    "JWT-based authentication with OAuth2 password flow",
+    "CRUD operations for posts with ownership enforcement",
+    "Vote/unvote system with conflict detection",
+    "PostgreSQL database via SQLAlchemy ORM",
+    "Alembic database migrations",
+    "CORS support for cross-origin requests",
+    "Password hashing with bcrypt via passlib",
+    "Pydantic v2 schema validation",
+    "Environment-based configuration via pydantic-settings",
+    "One-command deployment to Render.com"
+  ],
+  "publicApiSurface": [
+    "POST /login",
+    "POST /users/",
+    "GET /users/{id}",
+    "GET /posts/",
+    "GET /posts/{id}",
+    "POST /posts/",
+    "PUT /posts/{id}",
+    "DELETE /posts/{id}",
+    "POST /vote/"
+  ]
 }

@@ -1,0 +1,170 @@
+---
+title: "JWT authentication in Social Media Backend"
+sidebarTitle: "Authentication"
+description: "Social Media Backend uses OAuth2 password flow with JWT bearer tokens. Learn how to obtain a token, how it is verified, and which endpoints require authentication."
+---
+
+The Social Media Backend secures its endpoints with the OAuth2 password grant flow backed by JSON Web Tokens. A client first exchanges a valid email and password for a short-lived JWT access token; every subsequent request to a protected endpoint must present that token in the `Authorization: Bearer <token>` HTTP header. The server validates the token on every request without maintaining session state — making the API fully stateless and horizontally scalable.
+
+## Token flow
+
+<Steps>
+  <Step title="POST credentials to /login">
+    Send the user's email (as the `username` field) and `password` as `application/x-www-form-urlencoded` form data to `POST /login`. No `Authorization` header is needed for this request.
+  </Step>
+  <Step title="Server verifies credentials and issues a token">
+    The server looks up the user by email, verifies the bcrypt-hashed password, then calls `create_access_token()`. The token is signed with the `SECRET_KEY` environment variable using the `ALGORITHM` setting (e.g. `HS256`).
+  </Step>
+  <Step title="Token payload is constructed">
+    The JWT payload contains exactly two claims:
+    ```json
+    {
+      "user_id": 42,
+      "exp": 1718000000
+    }
+    ```
+    `exp` is set to `utcnow() + ACCESS_TOKEN_EXPIRE_MINUTES` and is validated automatically on every decode.
+  </Step>
+  <Step title="Include the token in subsequent requests">
+    Store the returned `access_token` and attach it to every protected request as an HTTP header:
+    ```
+    Authorization: Bearer <access_token>
+    ```
+  </Step>
+  <Step title="Server calls get_current_user() on each protected request">
+    FastAPI's dependency injection calls `get_current_user()`, which decodes the JWT with `verify_access_token()`, extracts `user_id`, and fetches the corresponding `User` row from PostgreSQL. The hydrated `User` object is injected directly into the route handler.
+  </Step>
+</Steps>
+
+## Token creation
+
+`create_access_token()` accepts an arbitrary data dictionary, appends an expiry timestamp, and returns the signed JWT string.
+
+```python
+import jwt
+from datetime import datetime, timedelta
+from .config import settings
+
+SECRET_KEY = settings.secret_key
+ALGORITHM = settings.algorithm
+ACCESS_TOKEN_EXPIRE_MINUTES = settings.access_token_expire_minutes
+
+
+def create_access_token(data: dict):
+    to_encode = data.copy()
+
+    expire = datetime.utcnow() + timedelta(
+        minutes=ACCESS_TOKEN_EXPIRE_MINUTES
+    )
+
+    to_encode.update({"exp": expire})
+
+    encoded_jwt = jwt.encode(
+        to_encode,
+        SECRET_KEY,
+        algorithm=ALGORITHM
+    )
+
+    return encoded_jwt
+```
+
+<Note>
+  `SECRET_KEY`, `ALGORITHM`, and `ACCESS_TOKEN_EXPIRE_MINUTES` are all loaded from environment variables (or a `.env` file) via `pydantic-settings`. See `app/config.py` for the full `Settings` model.
+</Note>
+
+## Token verification
+
+`verify_access_token()` decodes the raw JWT string and returns a `TokenData` object containing the `user_id`. `get_current_user()` wires this together with a database lookup to produce a fully hydrated `User` ORM instance.
+
+```python
+from fastapi import Depends, status, HTTPException
+from fastapi.security import OAuth2PasswordBearer
+from sqlalchemy.orm import Session
+from . import schemas, database, models
+
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl='login')
+
+
+def verify_access_token(token: str, credentials_exception):
+    try:
+        payload = jwt.decode(
+            token,
+            SECRET_KEY,
+            algorithms=[ALGORITHM]
+        )
+
+        id: str = payload.get("user_id")
+
+        if id is None:
+            raise credentials_exception
+
+        token_data = schemas.TokenData(id=id)
+
+    except jwt.InvalidTokenError:
+        raise credentials_exception
+
+    return token_data
+
+
+def get_current_user(
+    token: str = Depends(oauth2_scheme),
+    db: Session = Depends(database.get_db)
+):
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+
+    token = verify_access_token(token, credentials_exception)
+
+    user = db.query(models.User).filter(
+        models.User.id == token.id
+    ).first()
+
+    return user
+```
+
+If the token is missing, expired, or its signature is invalid, `jwt.InvalidTokenError` is caught and a `401 Unauthorized` response is returned with a `WWW-Authenticate: Bearer` header.
+
+## Protected vs public endpoints
+
+| Endpoint | Auth Required |
+|---|---|
+| `POST /login` | No |
+| `POST /users/` | No |
+| `GET /users/{id}` | No |
+| `GET /posts/` | Yes |
+| `GET /posts/{id}` | Yes |
+| `POST /posts/` | Yes |
+| `PUT /posts/{id}` | Yes |
+| `DELETE /posts/{id}` | Yes |
+| `POST /vote/` | Yes |
+
+<Tip>
+  Authentication is enforced purely through FastAPI's `Depends(get_current_user)` annotation on the route handler. Adding or removing this dependency is all that is needed to change a route's authentication requirement.
+</Tip>
+
+## Password hashing
+
+Passwords are never stored in plain text. Before a `User` row is inserted into the database the password is hashed with **bcrypt** via the `passlib` library. The same context is used to verify a plain-text candidate against the stored hash at login time.
+
+```python
+from passlib.context import CryptContext
+
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+
+def hash(password: str):
+    return pwd_context.hash(password)
+
+
+def verify(plain_password, hashed_password):
+    return pwd_context.verify(plain_password, hashed_password)
+```
+
+`hash()` is called during user creation (`POST /users/`) and the result replaces the raw password before the ORM model is persisted. `verify()` is called during login to compare the submitted password against the stored hash — bcrypt handles the salt automatically.
+
+<Warning>
+  The `/login` endpoint expects credentials as **form-encoded body data** (`Content-Type: application/x-www-form-urlencoded`), not JSON. The field names are `username` (supply the user's email address) and `password`. Sending a JSON body will result in a `422 Unprocessable Entity` error.
+</Warning>

@@ -1,0 +1,140 @@
+---
+title: "POST /posts/ — create a new post"
+sidebarTitle: "POST /posts/"
+description: "POST /posts/ creates a new post owned by the authenticated user. Accepts title, content, and published flag. Returns the created post. Requires JWT authentication."
+---
+
+The `POST /posts/` endpoint creates a new post and automatically associates it with the currently authenticated user. The `owner_id` field is derived directly from the JWT token — it cannot be set or overridden in the request body. A valid Bearer token must be included with every request.
+
+## Endpoint
+
+```
+POST /posts/
+```
+
+**Authentication required** — include a Bearer token in the `Authorization` header.
+
+## Request Body
+
+<ParamField body="title" type="string" required>
+  The title of the post. Must be a non-empty string.
+</ParamField>
+
+<ParamField body="content" type="string" required>
+  The body or main content of the post. Must be a non-empty string.
+</ParamField>
+
+<ParamField body="published" type="boolean" default={true}>
+  Whether the post should be marked as published. Defaults to `true` if not provided.
+</ParamField>
+
+## Response
+
+**HTTP 201 Created** — Returns the newly created `Post` object.
+
+<ResponseField name="id" type="integer">
+  The auto-generated unique numeric ID assigned to the new post.
+</ResponseField>
+
+<ResponseField name="title" type="string">
+  The title of the post as provided in the request.
+</ResponseField>
+
+<ResponseField name="content" type="string">
+  The body/content of the post as provided in the request.
+</ResponseField>
+
+<ResponseField name="published" type="boolean">
+  Whether the post is published.
+</ResponseField>
+
+<ResponseField name="created_at" type="string (datetime)">
+  ISO 8601 timestamp of when the post was created, set automatically by the server.
+</ResponseField>
+
+<ResponseField name="owner" type="object">
+  Details of the authenticated user who created the post.
+
+  <Expandable title="Owner fields">
+    <ResponseField name="id" type="integer">
+      Unique numeric ID of the owner.
+    </ResponseField>
+
+    <ResponseField name="email" type="string">
+      Email address of the owner.
+    </ResponseField>
+
+    <ResponseField name="created_at" type="string (datetime)">
+      ISO 8601 timestamp of when the owner account was created.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+## Error Responses
+
+| Status Code | Description |
+|-------------|-------------|
+| `401 Unauthorized` | No token was provided or the token is invalid/expired. |
+| `422 Unprocessable Entity` | The request body is missing required fields or contains invalid values. |
+
+## Examples
+
+<CodeGroup>
+
+```bash cURL
+# Create a published post
+curl -X POST http://localhost:8000/posts/ \
+  -H "Authorization: Bearer TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "title": "My First Post",
+    "content": "This is the content of my first post.",
+    "published": true
+  }'
+
+# Create a draft post (published: false)
+curl -X POST http://localhost:8000/posts/ \
+  -H "Authorization: Bearer TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "title": "Draft Post",
+    "content": "Work in progress.",
+    "published": false
+  }'
+```
+
+```python Python
+import requests
+
+BASE_URL = "http://localhost:8000"
+HEADERS = {"Authorization": "Bearer TOKEN"}
+
+# Create a published post
+payload = {
+    "title": "My First Post",
+    "content": "This is the content of my first post.",
+    "published": True
+}
+response = requests.post(f"{BASE_URL}/posts/", headers=HEADERS, json=payload)
+print(response.status_code)  # 201
+print(response.json())
+```
+
+</CodeGroup>
+
+### Successful Response Example
+
+```json
+{
+  "id": 42,
+  "title": "My First Post",
+  "content": "This is the content of my first post.",
+  "published": true,
+  "created_at": "2024-01-20T12:00:00.000000Z",
+  "owner": {
+    "id": 3,
+    "email": "alice@example.com",
+    "created_at": "2024-01-01T08:00:00.000000Z"
+  }
+}
+```

@@ -1,0 +1,239 @@
+---
+title: "Data models: Post, User, and Vote in Social Media Backend"
+sidebarTitle: "Data Models"
+description: "The three core SQLAlchemy ORM models — Post, User, and Vote — their columns, relationships, and corresponding Pydantic schemas for request/response validation."
+---
+
+The API is built around three database tables — `posts`, `users`, and `votes` — each defined as a SQLAlchemy ORM model that maps directly to a PostgreSQL table. Alongside each ORM model there are one or more Pydantic schemas that govern what data is accepted in request bodies and what is returned in responses. This two-layer approach (ORM for persistence, Pydantic for the API boundary) ensures that internal implementation details such as hashed passwords never leak to API consumers.
+
+## User model
+
+The `User` model represents an account in the system. Its email column carries a uniqueness constraint, and the password column stores a bcrypt hash — the plain-text password is never persisted.
+
+```python
+from .database import Base
+from sqlalchemy import Column, Integer, String
+from sqlalchemy.sql.expression import text
+from sqlalchemy.sql.sqltypes import TIMESTAMP
+
+
+class User(Base):
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True, nullable=False)
+    email = Column(String, nullable=False, unique=True)
+    password = Column(String, nullable=False)
+    created_at = Column(
+        TIMESTAMP(timezone=True),
+        nullable=False,
+        server_default=text('now()')
+    )
+    phone_number = Column(String)
+```
+
+### Columns
+
+| Column | Type | Constraints | Notes |
+|---|---|---|---|
+| `id` | `INTEGER` | Primary key, not null | Auto-incremented by PostgreSQL |
+| `email` | `VARCHAR` | Not null, unique | Used as the OAuth2 `username` at login |
+| `password` | `VARCHAR` | Not null | bcrypt hash; never returned in responses |
+| `created_at` | `TIMESTAMP WITH TIME ZONE` | Not null | Defaults to `now()` set by the database server |
+| `phone_number` | `VARCHAR` | Nullable | Optional; no format validation enforced |
+
+### Pydantic schemas
+
+| Schema | Fields | Used for |
+|---|---|---|
+| `UserCreate` | `email: EmailStr`, `password: str` | `POST /users/` request body |
+| `UserOut` | `id: int`, `email: EmailStr`, `created_at: datetime` | All API responses that include a user |
+
+```python
+from pydantic import BaseModel, EmailStr
+from datetime import datetime
+
+
+class UserCreate(BaseModel):
+    email: EmailStr
+    password: str
+
+
+class UserOut(BaseModel):
+    id: int
+    email: EmailStr
+    created_at: datetime
+
+    class Config:
+        orm_mode = True
+```
+
+<Warning>
+  The `password` field is deliberately absent from `UserOut`. FastAPI uses the declared response model to serialise the output, so the hashed password is **never** returned in any API response, even though it lives on the underlying ORM object.
+</Warning>
+
+## Post model
+
+The `Post` model represents a piece of content created by a user. It links back to its author via a foreign key on `owner_id` and exposes the full `User` object through a SQLAlchemy `relationship`.
+
+```python
+from .database import Base
+from sqlalchemy import Column, Integer, String, Boolean, ForeignKey
+from sqlalchemy.sql.expression import text
+from sqlalchemy.sql.sqltypes import TIMESTAMP
+from sqlalchemy.orm import relationship
+
+
+class Post(Base):
+    __tablename__ = "posts"
+
+    id = Column(Integer, primary_key=True, nullable=False)
+    title = Column(String, nullable=False)
+    content = Column(String, nullable=False)
+    published = Column(Boolean, server_default='TRUE', nullable=False)
+    created_at = Column(
+        TIMESTAMP(timezone=True),
+        nullable=False,
+        server_default=text('now()')
+    )
+    owner_id = Column(
+        Integer,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False
+    )
+
+    owner = relationship("User")
+```
+
+### Columns
+
+| Column | Type | Constraints | Notes |
+|---|---|---|---|
+| `id` | `INTEGER` | Primary key, not null | Auto-incremented by PostgreSQL |
+| `title` | `VARCHAR` | Not null | Post headline |
+| `content` | `VARCHAR` | Not null | Post body text |
+| `published` | `BOOLEAN` | Not null | Defaults to `TRUE` at the database level |
+| `created_at` | `TIMESTAMP WITH TIME ZONE` | Not null | Defaults to `now()` set by the database server |
+| `owner_id` | `INTEGER` | Foreign key → `users.id` CASCADE, not null | Deleting a user cascades to delete all their posts |
+
+### Relationship
+
+The `owner` attribute is a SQLAlchemy `relationship("User")`. When a post is queried with the relationship loaded, `post.owner` returns the full `User` ORM instance — which is then serialised as a nested `UserOut` object in API responses.
+
+### Pydantic schemas
+
+| Schema | Fields | Used for |
+|---|---|---|
+| `PostBase` | `title: str`, `content: str`, `published: bool = True` | Shared base |
+| `CreatePost` | Inherits `PostBase` (no extra fields) | `POST /posts/` request body |
+| `Post` | `PostBase` + `id`, `created_at`, `owner: UserOut` | Individual post responses |
+| `PostOut` | `Post: Post`, `vote: int` | List responses that include vote counts |
+
+```python
+from pydantic import BaseModel
+from datetime import datetime
+
+
+class PostBase(BaseModel):
+    title: str
+    content: str
+    published: bool = True
+
+
+class CreatePost(PostBase):
+    pass
+
+
+class Post(PostBase):
+    id: int
+    created_at: datetime
+    owner: UserOut
+
+    class Config:
+        orm_mode = True
+
+
+class PostOut(BaseModel):
+    Post: Post
+    vote: int
+
+    class Config:
+        orm_mode = True
+```
+
+<Note>
+  `PostOut` wraps a full `Post` schema together with an integer `vote` count. This is the shape returned by the posts list endpoint, which JOINs the `votes` table to aggregate vote totals per post.
+</Note>
+
+## Vote model
+
+The `Vote` model implements a simple upvote/downvote system using a composite primary key. Because `(user_id, post_id)` is the primary key, the database enforces at most one vote per user per post at the schema level — no application-side uniqueness check is needed.
+
+```python
+from .database import Base
+from sqlalchemy import Column, Integer, ForeignKey
+
+
+class Vote(Base):
+    __tablename__ = "votes"
+
+    user_id = Column(
+        Integer,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        primary_key=True
+    )
+    post_id = Column(
+        Integer,
+        ForeignKey("posts.id", ondelete="CASCADE"),
+        primary_key=True
+    )
+```
+
+### Columns & constraints
+
+| Column | Type | Constraints | Notes |
+|---|---|---|---|
+| `user_id` | `INTEGER` | Primary key (composite), FK → `users.id` CASCADE | Deleting a user removes all their votes |
+| `post_id` | `INTEGER` | Primary key (composite), FK → `posts.id` CASCADE | Deleting a post removes all votes on it |
+
+Both foreign keys are configured with `ondelete="CASCADE"`, so vote rows are cleaned up automatically when either the referenced user or the referenced post is deleted.
+
+### Pydantic schema
+
+The `Vote` request schema is used by `POST /vote/` to determine which post to vote on and whether the action is an upvote (`dir=1`) or a removal of an existing vote (`dir=0`).
+
+```python
+from pydantic import BaseModel, Field
+from typing import Annotated
+
+
+class Vote(BaseModel):
+    post_id: int
+    dir: Annotated[int, Field(le=1)]
+```
+
+`dir` is constrained to be at most `1` by the `Field(le=1)` annotation. Combined with standard integer validation (minimum `0`), only the values `0` and `1` are accepted.
+
+<Tip>
+  Send `dir=1` to cast a vote and `dir=0` to retract an existing vote. Attempting to vote on a post you have already voted on (or retract a vote that doesn't exist) will return a `409 Conflict` or `404 Not Found` from the route handler.
+</Tip>
+
+## Schema hierarchy
+
+The Pydantic schemas build on each other to avoid repetition and to ensure that the same field definitions are reused consistently across request and response models.
+
+```
+UserCreate          (email + password)          ← POST /users/ body
+    └─ [no inheritance]
+UserOut             (id + email + created_at)   ← embedded in Post responses
+
+PostBase            (title + content + published)
+    └── CreatePost  (no extra fields)            ← POST /posts/ body
+    └── Post        (+ id + created_at + owner)  ← single post response
+            └── PostOut  (Post + vote count)     ← list post response
+
+Vote                (post_id + dir)              ← POST /vote/ body
+```
+
+<Note>
+  `UserOut` is defined twice in `schemas.py` — the second definition shadows the first. Both are identical, so there is no behavioural difference, but the duplication can be cleaned up by removing the first occurrence.
+</Note>

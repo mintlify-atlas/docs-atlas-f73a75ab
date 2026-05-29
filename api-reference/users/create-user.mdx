@@ -1,0 +1,108 @@
+---
+title: "POST /users/ — register a new user account"
+sidebarTitle: "POST /users/"
+description: "POST /users/ registers a new user with an email and password. Returns the created user profile. Passwords are hashed with bcrypt before storage."
+---
+
+This endpoint creates a new user account in the Social Media Backend. It validates that the submitted email address is well-formed and unique, hashes the plaintext password with bcrypt before writing it to the database, and returns the newly created user profile. No authentication token is required to call this endpoint — it is the entry point for new user registration.
+
+## Endpoint
+
+```
+POST /users/
+```
+
+Authentication is **not required** for this endpoint.
+
+## Request Body
+
+<ParamField body="email" type="string" required>
+  A valid email address for the new account. Must be unique across all registered users — submitting an email that already exists returns a `409 Conflict` error. The value is validated against RFC 5322 email format rules via Pydantic's `EmailStr`.
+</ParamField>
+
+<ParamField body="password" type="string" required>
+  The plaintext password for the new account. The password is immediately hashed with bcrypt before storage and is **never** stored or returned in plaintext. The raw value is not persisted anywhere.
+</ParamField>
+
+## Response
+
+A successful request returns HTTP **201 Created** with the new user's profile.
+
+<ResponseField name="id" type="integer">
+  Auto-generated unique integer ID assigned to the user by the database.
+</ResponseField>
+
+<ResponseField name="email" type="string">
+  The email address that was registered. Confirms the value that was accepted and stored.
+</ResponseField>
+
+<ResponseField name="created_at" type="string">
+  ISO 8601 timestamp (with timezone) indicating when the account was created. Generated automatically by the database using `now()` at insert time. Example: `"2024-01-15T10:30:00.000000+00:00"`.
+</ResponseField>
+
+<Note>
+  The `password` field is **never** included in any response from this endpoint. Only `id`, `email`, and `created_at` are returned, as defined by the `UserOut` schema.
+</Note>
+
+## Error Responses
+
+| Status Code | Detail Message | Cause |
+|---|---|---|
+| `409 Conflict` | `"User with this email already exists"` | The submitted email address is already registered to another account. |
+| `422 Unprocessable Entity` | *(Pydantic validation error)* | The `email` field failed format validation, or a required field is missing from the request body. |
+
+## Examples
+
+<CodeGroup>
+
+```bash curl
+curl -X POST http://localhost:8000/users/ \
+  -H "Content-Type: application/json" \
+  -d '{"email": "alice@example.com", "password": "securepass123"}'
+```
+
+```python Python
+import requests
+
+response = requests.post(
+    "http://localhost:8000/users/",
+    json={"email": "alice@example.com", "password": "securepass123"}
+)
+user = response.json()
+print(user["id"])     # e.g. 1
+print(user["email"])  # e.g. "alice@example.com"
+```
+
+</CodeGroup>
+
+### Successful Response — 201 Created
+
+```json
+{
+  "id": 1,
+  "email": "alice@example.com",
+  "created_at": "2024-01-15T10:30:00.000000+00:00"
+}
+```
+
+### Error Response — 409 Conflict
+
+```json
+{
+  "detail": "User with this email already exists"
+}
+```
+
+### Error Response — 422 Unprocessable Entity
+
+```json
+{
+  "detail": [
+    {
+      "loc": ["body", "email"],
+      "msg": "value is not a valid email address",
+      "type": "value_error.email"
+    }
+  ]
+}
+```

@@ -1,0 +1,166 @@
+---
+title: "Run Social Media Backend locally for development"
+sidebarTitle: "Local Setup"
+description: "Set up the Social Media Backend on your local machine with PostgreSQL, configure environment variables, run Alembic migrations, and start the Uvicorn development server."
+---
+
+Running the Social Media Backend locally gives you a full development environment with hot-reload, interactive API docs, and direct access to your PostgreSQL database. This guide walks you through every step, from cloning the repository to verifying your first successful response.
+
+## Prerequisites
+
+Before you begin, make sure you have the following installed and available on your `PATH`:
+
+- **Python 3.14+** — required by `pyproject.toml` (`requires-python = ">=3.14"`)
+- **PostgreSQL** — a running local instance (any recent version)
+- **`uv`** (recommended) — fast Python package manager; or plain `pip` as a fallback
+
+<Tip>
+  `uv` is the recommended way to manage dependencies for this project. Install it with `curl -LsSf https://astral.sh/uv/install.sh | sh` or see the [uv documentation](https://docs.astral.sh/uv/).
+</Tip>
+
+## Setup steps
+
+<Steps>
+  <Step title="Clone the repository">
+    Clone the project from GitHub and navigate into the application directory:
+
+    ```bash
+    git clone https://github.com/pvnm4/Social-Media-Backend.git
+    cd Social-Media-Backend/Social-Media-Backend
+    ```
+  </Step>
+
+  <Step title="Create a virtual environment and install dependencies">
+    **With `uv` (recommended):**
+
+    ```bash
+    uv sync
+    ```
+
+    This reads `pyproject.toml` and installs all declared dependencies — including FastAPI, SQLAlchemy, Alembic, Uvicorn, passlib, PyJWT, psycopg2, and pydantic-settings — into an isolated virtual environment automatically.
+
+    **With pip (alternative):**
+
+    ```bash
+    pip install -r requirements.txt
+    ```
+
+    <Note>
+      The project's canonical dependency list lives in `pyproject.toml`. If you use pip, make sure your `requirements.txt` is kept in sync with those pinned versions.
+    </Note>
+  </Step>
+
+  <Step title="Create a PostgreSQL database">
+    Create a dedicated database for the application. Using the `createdb` CLI:
+
+    ```bash
+    createdb social_media
+    ```
+
+    Or from within a `psql` session:
+
+    ```sql
+    CREATE DATABASE social_media;
+    ```
+
+    You can use any database name you like — just make sure it matches the `DATABASE_NAME` value you set in the next step.
+  </Step>
+
+  <Step title="Configure environment variables">
+    The application reads all configuration from a `.env` file via `pydantic-settings`. Create `.env` in the project root (`Social-Media-Backend/Social-Media-Backend/`) with the following template:
+
+    ```bash
+    DATABASE_HOSTNAME=localhost
+    DATABASE_PORT=5432
+    DATABASE_PASSWORD=your_password
+    DATABASE_USERNAME=postgres
+    DATABASE_NAME=social_media
+    SECRET_KEY=your_super_secret_key_here
+    ALGORITHM=HS256
+    ACCESS_TOKEN_EXPIRE_MINUTES=60
+    ```
+
+    Every key maps directly to a field in `app/config.py`:
+
+    ```python
+    class Settings(BaseSettings):
+        database_hostname: str
+        database_port: str
+        database_password: str
+        database_username: str
+        database_name: str
+        secret_key: str
+        algorithm: str
+        access_token_expire_minutes: int
+
+        class Config:
+            env_file = ".env"
+    ```
+
+    <Warning>
+      Never commit your `.env` file to version control. Add it to `.gitignore` before your first commit.
+    </Warning>
+
+    These same variables are used by both `app/database.py` (to build the SQLAlchemy connection URL) and `alembic/env.py` (to build the migration connection URL), so a single `.env` file covers the entire application.
+  </Step>
+
+  <Step title="Run database migrations">
+    Apply all Alembic migrations to bring your database schema up to the latest version:
+
+    ```bash
+    alembic upgrade head
+    ```
+
+    This runs all 7 migration files in order, creating the `posts`, `users`, and `votes` tables with all their columns and constraints. See the [DB Migrations](/deployment/database-migrations) page for a full breakdown of each migration.
+  </Step>
+
+  <Step title="Start the development server">
+    Launch Uvicorn with hot-reload enabled:
+
+    ```bash
+    uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    ```
+
+    You should see output similar to:
+
+    ```
+    INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+    INFO:     Started reloader process [xxxxx] using WatchFiles
+    INFO:     Started server process [xxxxx]
+    INFO:     Waiting for application startup.
+    INFO:     Application startup complete.
+    ```
+  </Step>
+</Steps>
+
+## Verify the installation
+
+Once the server is running, confirm everything is working with two quick checks:
+
+**Health check endpoint** — open your browser or run:
+
+```bash
+curl http://localhost:8000/
+```
+
+You should receive:
+
+```json
+{"message": "Welcome to the Social Media App"}
+```
+
+**Interactive API docs** — navigate to `http://localhost:8000/docs` to open the Swagger UI. Every endpoint is listed here and can be called directly from the browser, including authenticated routes (use the **Authorize** button to supply a JWT token).
+
+<Note>
+  The `/redoc` path at `http://localhost:8000/redoc` provides an alternative ReDoc-style documentation view of the same OpenAPI schema.
+</Note>
+
+## Development tips
+
+- **Hot reload** — the `--reload` flag tells Uvicorn to watch your source files and restart the server automatically whenever you save a change. This is ideal for iterative development but should not be used in production.
+
+- **Testing endpoints with auth** — the Swagger UI at `/docs` includes an **Authorize** button. After creating a user via `POST /users/` and logging in via `POST /login`, paste the returned JWT into the authorization dialog to test protected endpoints without a separate HTTP client.
+
+- **ReDoc** — if you prefer a read-only, three-panel documentation layout, the `/redoc` path renders the same OpenAPI spec in ReDoc format, which is particularly useful for sharing API documentation with consumers.
+
+- **Resetting the schema** — during early development you may want to tear down and rebuild the schema. Use `alembic downgrade base` to drop all tables, then `alembic upgrade head` to recreate them cleanly.

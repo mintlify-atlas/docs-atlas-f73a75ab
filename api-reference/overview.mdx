@@ -1,0 +1,99 @@
+---
+title: "Social Media Backend REST API reference overview"
+sidebarTitle: "Overview"
+description: "Base URL, authentication scheme, request/response formats, and common error codes for the Social Media Backend REST API."
+---
+
+The Social Media Backend exposes a RESTful HTTP API built with FastAPI and backed by PostgreSQL. Every endpoint returns JSON, and every request body must be JSON (with `Content-Type: application/json`) — with one exception: `POST /login` accepts form-encoded credentials following the OAuth2 password flow. Most endpoints require a JWT Bearer token obtained from `POST /login`; a small number of read/registration endpoints are publicly accessible without authentication.
+
+## Base URL
+
+For local development the API is available at:
+
+```
+http://localhost:8000
+```
+
+The root path (`GET /`) returns a welcome message that confirms the server is running:
+
+```json
+{"message": "Welcome to the Social Media App"}
+```
+
+When the application is deployed to Render (or any other hosting provider), replace `http://localhost:8000` with the provider-assigned base URL. All relative paths documented here remain unchanged.
+
+## Authentication
+
+The API uses signed JWT Bearer tokens for authentication. Tokens are created with the HS256 algorithm and contain the authenticated user's `user_id` in the payload. Expiry is controlled by the `ACCESS_TOKEN_EXPIRE_MINUTES` environment variable (configured in `app/config.py` via Pydantic `Settings`).
+
+**Obtaining a token**
+
+Call `POST /login` with the user's email and password as form-encoded data. On success the response contains an `access_token` string and a `token_type` of `"bearer"`.
+
+**Using a token**
+
+Include the token in the `Authorization` header of every protected request:
+
+```
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+```
+
+If the header is absent, malformed, or the token is expired/invalid, FastAPI returns `401 Unauthorized` with the detail `"Could not validate credentials"`.
+
+## Request format
+
+| Endpoint | Content-Type | Body format |
+|---|---|---|
+| `POST /login` | `application/x-www-form-urlencoded` | `username=<email>&password=<password>` |
+| All other mutating endpoints | `application/json` | JSON object matching the endpoint's schema |
+
+The `username` field in the login form must contain the user's **email address**. This is a FastAPI `OAuth2PasswordRequestForm` convention — the field is named `username` in the wire format but is validated against the `email` column in the database.
+
+## Response format
+
+All responses are JSON. The following HTTP status codes are used for successful operations:
+
+| Scenario | Status code |
+|---|---|
+| Successful read (`GET`) | `200 OK` |
+| Successful authentication (`POST /login`) | `200 OK` |
+| Successful resource creation (`POST /users/`, `POST /posts/`, `POST /vote/`) | `201 Created` |
+| Successful deletion (`DELETE /posts/{id}`) | `204 No Content` — response body is empty |
+
+List endpoints (e.g. `GET /posts/`) return a JSON array. Post list items follow the `PostOut` schema, which wraps each `Post` object together with its integer `vote` count.
+
+## Common error codes
+
+| Status | Meaning |
+|---|---|
+| 400 | Bad request / validation error |
+| 401 | Missing or invalid JWT token |
+| 403 | Forbidden — invalid credentials or not the resource owner |
+| 404 | Resource not found |
+| 409 | Conflict — resource already exists (duplicate email on registration, or duplicate vote) |
+| 422 | Unprocessable entity — request body failed Pydantic validation |
+
+## Available endpoints
+
+The table below summarises every route registered in the application. Routes marked **Yes** under **Auth** require a valid `Authorization: Bearer <token>` header.
+
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| POST | /login | No | Authenticate and get a JWT access token |
+| POST | /users/ | No | Register a new user |
+| GET | /users/{id} | No | Get a user by ID |
+| GET | /posts/ | Yes | List all posts with vote counts |
+| GET | /posts/{id} | Yes | Get a single post with its vote count |
+| POST | /posts/ | Yes | Create a new post |
+| PUT | /posts/{id} | Yes | Update a post (owner only) |
+| DELETE | /posts/{id} | Yes | Delete a post (owner only) |
+| POST | /vote/ | Yes | Cast or retract a vote on a post |
+
+## Interactive docs
+
+FastAPI automatically generates interactive API documentation from the OpenAPI schema. Two UIs are available while the server is running:
+
+- **Swagger UI** — [`http://localhost:8000/docs`](http://localhost:8000/docs): try out requests directly in the browser.
+- **ReDoc** — [`http://localhost:8000/redoc`](http://localhost:8000/redoc): a clean, read-only reference view.
+
+Both UIs reflect all routes, request schemas, and response models defined in the application's Pydantic models and FastAPI router declarations.

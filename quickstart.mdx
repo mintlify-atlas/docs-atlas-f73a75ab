@@ -1,47 +1,169 @@
 ---
-title: "Quickstart"
-description: "Begin with a guide on the fastest path to a successful outcome"
+title: "Get started with Social Media Backend in 5 minutes"
+sidebarTitle: "Quickstart"
+description: "Set up the Social Media Backend API locally, connect a PostgreSQL database, and make your first authenticated request in under 5 minutes."
 ---
 
-Describe how someone begins using your product. What is the first thing they need to do? Are there any prerequisites?
-
-A quickstart should take someone from zero to using your product. They'll get a quick win and a sense of what they can accomplish.
-
-## Prerequisites
-
-Before you begin, you must have:
-
-- Requirement one (for example, Node.js 18+, a free account, an API key)
-- Requirement two (for example, a compatible device, a compatible browser, a compatible operating system)
-
-## Get started
+This guide walks you through cloning the project, connecting it to a local PostgreSQL database, and making your first authenticated API call — all in under five minutes. By the end you will have a running server, a registered user account, and a freshly created post.
 
 <Steps>
-  <Step title="Install">
-    Describe how to install your product or sign up.
+
+  <Step title="Clone the repository">
+    Clone the repository and navigate into the project directory.
 
     ```bash
-    npm install your-package
+    git clone https://github.com/pvnm4/Social-Media-Backend.git
+    cd Social-Media-Backend/Social-Media-Backend
     ```
   </Step>
-  <Step title="Configure">
-    Describe any setup or configuration needed before first use.
+
+  <Step title="Install dependencies">
+    Install the project dependencies using either **uv** (recommended — faster, lockfile-backed) or plain **pip**.
+
+    <CodeGroup>
+
+    ```bash uv
+    pip install uv
+    uv sync
+    ```
+
+    ```bash pip
+    pip install -r requirements.txt
+    ```
+
+    </CodeGroup>
+  </Step>
+
+  <Step title="Configure environment">
+    Create a `.env` file in the project root (the same directory that contains `pyproject.toml`). The application uses pydantic-settings to load every value from this file at startup — all variables are required.
+
+    ```bash .env
+    DATABASE_HOSTNAME=localhost
+    DATABASE_PORT=5432
+    DATABASE_PASSWORD=your_password
+    DATABASE_USERNAME=postgres
+    DATABASE_NAME=social_media
+    SECRET_KEY=your_super_secret_key_here
+    ALGORITHM=HS256
+    ACCESS_TOKEN_EXPIRE_MINUTES=60
+    ```
+
+    <Tip>
+      Generate a cryptographically secure value for `SECRET_KEY` with:
+
+      ```bash
+      openssl rand -hex 32
+      ```
+    </Tip>
+
+    <Warning>
+      Never commit `.env` to source control. Add it to `.gitignore` before your first commit.
+    </Warning>
+
+    Make sure the PostgreSQL database named `social_media` (or whatever you set for `DATABASE_NAME`) already exists before continuing. You can create it with:
 
     ```bash
-    your-cli init
+    createdb -U postgres social_media
     ```
   </Step>
-  <Step title="Run it">
-    Show the first thing a user does to see it working.
+
+  <Step title="Run database migrations">
+    Apply all Alembic migrations to create the schema in your database.
 
     ```bash
-    your-cli start
+    alembic upgrade head
     ```
+
+    On success Alembic prints the revision IDs it applied. If you see an error connecting to the database, double-check the credentials in your `.env` file.
   </Step>
+
+  <Step title="Start the server">
+    Launch the development server with hot-reload enabled.
+
+    ```bash
+    uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    ```
+
+    You should see output similar to:
+
+    ```
+    INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+    INFO:     Started reloader process
+    ```
+
+    <Tip>
+      FastAPI generates interactive API documentation automatically. Open **[http://localhost:8000/docs](http://localhost:8000/docs)** in your browser to explore every endpoint, view request/response schemas, and try calls directly in the UI — no extra tooling needed.
+    </Tip>
+  </Step>
+
+  <Step title="Register a user">
+    Create your first user account. The `POST /users/` endpoint does **not** require a token.
+
+    ```bash
+    curl -X POST http://localhost:8000/users/ \
+      -H "Content-Type: application/json" \
+      -d '{"email": "user@example.com", "password": "securepassword"}'
+    ```
+
+    A successful response returns the new user's ID, email, and creation timestamp with HTTP `201 Created`:
+
+    ```json
+    {
+      "id": 1,
+      "email": "user@example.com",
+      "created_at": "2024-01-01T00:00:00.000000Z"
+    }
+    ```
+
+    <Note>
+      Attempting to register with an email that already exists returns HTTP `409 Conflict`.
+    </Note>
+  </Step>
+
+  <Step title="Login to get a token">
+    Exchange your credentials for a JWT access token. The login endpoint expects **form-encoded** data (not JSON), because it uses FastAPI's `OAuth2PasswordRequestForm`.
+
+    ```bash
+    curl -X POST http://localhost:8000/login \
+      -d 'username=user@example.com&password=securepassword'
+    ```
+
+    The response contains your Bearer token:
+
+    ```json
+    {
+      "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+      "token_type": "bearer"
+    }
+    ```
+
+    Copy the value of `access_token` — you need it for all subsequent requests.
+  </Step>
+
+  <Step title="Create your first post">
+    Pass the access token in the `Authorization` header to create a post. Replace `TOKEN` with the value you received in the previous step.
+
+    ```bash
+    curl -X POST http://localhost:8000/posts/ \
+      -H "Authorization: Bearer TOKEN" \
+      -H "Content-Type: application/json" \
+      -d '{"title": "My first post", "content": "Hello world!", "published": true}'
+    ```
+
+    A successful response returns the created post with HTTP `201 Created`:
+
+    ```json
+    {
+      "id": 1,
+      "title": "My first post",
+      "content": "Hello world!",
+      "published": true,
+      "owner_id": 1,
+      "created_at": "2024-01-01T00:00:00.000000Z"
+    }
+    ```
+
+    You are now set up and ready to explore the full API. Head to [http://localhost:8000/docs](http://localhost:8000/docs) to browse all available endpoints interactively.
+  </Step>
+
 </Steps>
-
-<Tip>
-  Give people a way to get help. This could be a link to a support page, a chat with a customer support agent, or a forum for your product.
-
-  Example: Need help? Reach out to us at [support@yourcompany.com](mailto:support@yourcompany.com).
-</Tip>

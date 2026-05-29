@@ -1,0 +1,128 @@
+---
+title: "Social Media Backend architecture and request lifecycle"
+sidebarTitle: "Architecture"
+description: "How the Social Media Backend layers FastAPI routers, SQLAlchemy ORM, and Pydantic schemas together — and how a request flows from HTTP to database and back."
+---
+
+The Social Media Backend is built as a clean, layered REST API that separates concerns across five distinct levels: the HTTP transport (Uvicorn), the web framework (FastAPI), authentication middleware (OAuth2PasswordBearer), data validation (Pydantic v2), and database access (SQLAlchemy ORM over PostgreSQL). Each layer has a single responsibility, making the codebase straightforward to extend and test in isolation. Alembic sits alongside the ORM layer to version-control schema changes without requiring manual SQL migrations.
+
+## Request lifecycle
+
+Every inbound HTTP request travels through the following chain before a response is returned to the caller.
+
+1. **Uvicorn** receives the raw TCP connection and forwards the ASGI-compatible request to FastAPI.
+2. **CORSMiddleware** inspects the `Origin` header and attaches the appropriate `Access-Control-*` response headers.
+3. **FastAPI router** matches the path and HTTP method, then resolves all `Depends()` annotations declared on the route handler.
+4. **OAuth2PasswordBearer** (injected via `Depends(oauth2_scheme)`) extracts the `Authorization: Bearer <token>` header on protected routes. If the header is absent or malformed, FastAPI returns `401` before the handler is called.
+5. **`get_current_user`** decodes and validates the JWT, then executes a database lookup to hydrate the full `User` ORM object. This resolved user is passed directly into the route handler.
+6. **`get_db`** yields a `SessionLocal` SQLAlchemy session that is bound to the lifetime of the request and automatically closed in the `finally` block after the response is sent.
+7. **Route handler** performs business logic using the session and ORM models, then returns a Python object.
+8. **Pydantic response model** serialises the returned object, stripping any fields not declared in the response schema (e.g. `password`), before FastAPI serialises it to JSON.
+
+<Note>
+  SQLAlchemy sessions are created per-request via the `get_db` generator dependency and are always closed after the response is delivered — even if an exception is raised inside the handler.
+</Note>
+
+## Application layers
+
+| Layer | Component | Purpose |
+|---|---|---|
+| HTTP server | Uvicorn | ASGI server that handles TCP connections and forwards requests to FastAPI |
+| Framework | FastAPI | Routing, dependency injection, automatic OpenAPI/Swagger docs |
+| Auth middleware | OAuth2PasswordBearer | JWT bearer token extraction from the `Authorization` header |
+| Validation | Pydantic v2 | Request body parsing, response serialisation, and field-level constraints |
+| ORM | SQLAlchemy 2.0 | Database abstraction — maps Python classes to PostgreSQL tables |
+| Migrations | Alembic | Schema version control; runs `upgrade`/`downgrade` scripts against the live DB |
+| Database | PostgreSQL | Persistent relational storage for users, posts, and votes |
+
+## Router structure
+
+The application mounts four routers inside `app/main.py`. Each router lives in its own module under `app/routers/` and encapsulates all routes for a single resource.
+
+| Router module | URL prefix | OpenAPI tag |
+|---|---|---|
+| `post.router` | `/posts` | Posts |
+| `user.router` | `/users` | Users |
+| `auth.router` | *(none)* | Authentication |
+| `vote.router` | `/vote` | Vote |
+
+The routers are registered in `main.py` with `app.include_router()`:
+
+```python
+app.include_router(post.router)
+app.include_router(user.router)
+app.include_router(auth.router)
+app.include_router(vote.router)
+```
+
+Because `auth.router` carries no prefix, the login endpoint is reachable directly at `POST /login` rather than under a sub-path.
+
+<Tip>
+  FastAPI automatically generates interactive API documentation at `/docs` (Swagger UI) and `/redoc` (ReDoc) using the router and schema metadata — no extra configuration is needed.
+</Tip>
+
+## CORS configuration
+
+Cross-Origin Resource Sharing is configured to be fully permissive, allowing any browser origin to call the API. This is appropriate for development and public APIs, but should be tightened for production deployments that serve known front-end origins.
+
+```python
+origins = ["*"]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+```
+
+<Warning>
+  Setting `allow_origins=["*"]` together with `allow_credentials=True` is rejected by most browsers for credentialed requests (cookies, `Authorization` headers). In production, replace `"*"` with an explicit list of trusted origins such as `["https://yourapp.com"]`.
+</Warning>
+
+## Dependency injection
+
+FastAPI's `Depends()` system is used throughout the codebase to supply two cross-cutting concerns to route handlers: a database session and the currently authenticated user. Both are declared as function parameters; FastAPI resolves them automatically before the handler body executes.
+
+```python
+from fastapi import Depends
+from sqlalchemy.orm import Session
+from .database import get_db
+from .oauth2 import get_current_user
+
+# get_db yields a session and closes it after the request
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+# get_current_user decodes the JWT and queries the User row
+def get_current_user(
+    token: str = Depends(oauth2_scheme),
+    db: Session = Depends(database.get_db)
+):
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    token = verify_access_token(token, credentials_exception)
+    user = db.query(models.User).filter(
+        models.User.id == token.id
+    ).first()
+    return user
+
+# Usage in a route handler
+@router.get("/posts/{id}")
+def get_post(
+    id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    ...
+```
+
+Injecting `get_current_user` into a route handler automatically makes that endpoint require a valid JWT — no decorators or extra configuration are needed beyond the `Depends()` annotation.

@@ -1,0 +1,156 @@
+---
+title: "PUT /posts/{id} — update a post by ID"
+sidebarTitle: "PUT /posts/{id}"
+description: "PUT /posts/{id} replaces all fields of an existing post. Only the post owner can update it. Requires JWT authentication and returns the updated post."
+---
+
+The `PUT /posts/{id}` endpoint fully replaces the content of an existing post. Because this is a `PUT` (not `PATCH`), all fields must be provided — omitting a field resets it to its default value. Only the user who originally created the post can update it; attempting to update a post owned by another user returns a `403 Forbidden` error.
+
+## Endpoint
+
+```
+PUT /posts/{id}
+```
+
+**Authentication required** — include a Bearer token in the `Authorization` header.
+
+## Path Parameters
+
+<ParamField path="id" type="integer" required>
+  The unique numeric identifier of the post to update.
+</ParamField>
+
+## Request Body
+
+<ParamField body="title" type="string" required>
+  The new title for the post. Replaces the existing title entirely.
+</ParamField>
+
+<ParamField body="content" type="string" required>
+  The new body/content for the post. Replaces the existing content entirely.
+</ParamField>
+
+<ParamField body="published" type="boolean" default={true}>
+  The new published status. Replaces the existing value. Defaults to `true` if omitted.
+</ParamField>
+
+## Response
+
+**HTTP 200 OK** — Returns the updated `Post` object.
+
+<ResponseField name="id" type="integer">
+  The unique numeric ID of the updated post.
+</ResponseField>
+
+<ResponseField name="title" type="string">
+  The updated title of the post.
+</ResponseField>
+
+<ResponseField name="content" type="string">
+  The updated body/content of the post.
+</ResponseField>
+
+<ResponseField name="published" type="boolean">
+  The updated published status of the post.
+</ResponseField>
+
+<ResponseField name="created_at" type="string (datetime)">
+  ISO 8601 timestamp of when the post was originally created. This value is not changed by an update.
+</ResponseField>
+
+<ResponseField name="owner" type="object">
+  Details of the user who owns the post.
+
+  <Expandable title="Owner fields">
+    <ResponseField name="id" type="integer">
+      Unique numeric ID of the owner.
+    </ResponseField>
+
+    <ResponseField name="email" type="string">
+      Email address of the owner.
+    </ResponseField>
+
+    <ResponseField name="created_at" type="string (datetime)">
+      ISO 8601 timestamp of when the owner account was created.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+## Error Responses
+
+| Status Code | Description |
+|-------------|-------------|
+| `401 Unauthorized` | No token was provided or the token is invalid/expired. |
+| `403 Forbidden` | The authenticated user is not the owner of this post. |
+| `404 Not Found` | No post with the specified `id` exists. |
+| `422 Unprocessable Entity` | The request body is missing required fields or contains invalid values. |
+
+## Examples
+
+<CodeGroup>
+
+```bash cURL
+# Update post with ID 42 (all fields must be supplied)
+curl -X PUT http://localhost:8000/posts/42 \
+  -H "Authorization: Bearer TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "title": "Updated Title",
+    "content": "This content has been revised.",
+    "published": true
+  }'
+
+# Unpublish a post
+curl -X PUT http://localhost:8000/posts/42 \
+  -H "Authorization: Bearer TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "title": "Updated Title",
+    "content": "This content has been revised.",
+    "published": false
+  }'
+```
+
+```python Python
+import requests
+
+BASE_URL = "http://localhost:8000"
+HEADERS = {"Authorization": "Bearer TOKEN"}
+
+post_id = 42
+payload = {
+    "title": "Updated Title",
+    "content": "This content has been revised.",
+    "published": True
+}
+response = requests.put(
+    f"{BASE_URL}/posts/{post_id}",
+    headers=HEADERS,
+    json=payload
+)
+print(response.status_code)  # 200
+print(response.json())
+```
+
+</CodeGroup>
+
+### Successful Response Example
+
+```json
+{
+  "id": 42,
+  "title": "Updated Title",
+  "content": "This content has been revised.",
+  "published": true,
+  "created_at": "2024-01-20T12:00:00.000000Z",
+  "owner": {
+    "id": 3,
+    "email": "alice@example.com",
+    "created_at": "2024-01-01T08:00:00.000000Z"
+  }
+}
+```
+
+<Note>
+  This endpoint performs a **full replacement**. All fields (`title`, `content`, `published`) must be included in every request. Omitting `published` will reset it to its default value of `true`.
+</Note>

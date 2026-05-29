@@ -1,0 +1,132 @@
+---
+title: "POST /vote/ — vote or unvote on a post"
+sidebarTitle: "POST /vote/"
+description: "POST /vote/ adds or removes the authenticated user's vote on a post. Set dir=1 to vote, dir=0 to remove your vote. Requires JWT authentication."
+---
+
+The vote endpoint lets authenticated users upvote or remove their vote from a post. Each user can vote on a post at most once — submitting a second upvote on the same post returns a `409 Conflict`. To undo a vote, send the same request with `dir: 0`. Both actions are handled by a single `POST /vote/` endpoint.
+
+## Endpoint
+
+**`POST /vote/`** — authentication required.
+
+---
+
+## How voting works
+
+Voting is controlled by the `dir` field in the request body:
+
+- **`dir: 1`** — Adds your vote to the post. If you have already voted on this post, the server returns `409 Conflict`.
+- **`dir: 0`** — Removes your existing vote from the post. If you have not yet voted on this post, the server returns `404 Not Found`.
+
+Each vote is stored as a row in the `votes` table with a composite primary key of `(user_id, post_id)`. This constraint is enforced at the database level, guaranteeing that each user can hold at most one vote per post at any given time.
+
+```python
+# Vote ORM model
+class Vote(Base):
+    __tablename__ = "votes"
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    post_id = Column(Integer, ForeignKey("posts.id", ondelete="CASCADE"), primary_key=True)
+```
+
+---
+
+## Request body
+
+<ParamField body="post_id" type="integer" required>
+  The ID of the post to vote on. The post must exist — if it does not, a `404 Not Found` is returned.
+</ParamField>
+
+<ParamField body="dir" type="integer" required>
+  Direction of the vote action. Use `1` to add a vote, or `0` to remove your existing vote. The maximum accepted value is `1`.
+</ParamField>
+
+---
+
+## Response
+
+**HTTP 201 Created**
+
+Returns a plain JSON message confirming the action.
+
+When voting (`dir: 1`):
+
+```json
+{"message": "Successfully added vote"}
+```
+
+When removing a vote (`dir: 0`):
+
+```json
+{"message": "successfully deleted vote"}
+```
+
+<ResponseField name="message" type="string">
+  A human-readable confirmation of the action taken — either `"Successfully added vote"` or `"successfully deleted vote"`.
+</ResponseField>
+
+---
+
+## Error responses
+
+| Status | Condition |
+|--------|-----------|
+| `401 Unauthorized` | Missing or invalid JWT token. |
+| `404 Not Found` | The target post does not exist, **or** (when `dir: 0`) the authenticated user has not voted on this post. |
+| `409 Conflict` | The authenticated user has already voted on this post (when `dir: 1`). |
+
+---
+
+## Examples
+
+<CodeGroup>
+
+```bash Add a vote
+curl -X POST http://localhost:8000/vote/ \
+  -H "Authorization: Bearer TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"post_id": 42, "dir": 1}'
+```
+
+```bash Remove a vote
+curl -X POST http://localhost:8000/vote/ \
+  -H "Authorization: Bearer TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"post_id": 42, "dir": 0}'
+```
+
+```python Add a vote (Python)
+import requests
+
+headers = {"Authorization": "Bearer TOKEN"}
+
+# Add a vote
+resp = requests.post(
+    "http://localhost:8000/vote/",
+    json={"post_id": 42, "dir": 1},
+    headers=headers
+)
+print(resp.json())  # {"message": "Successfully added vote"}
+```
+
+```python Remove a vote (Python)
+import requests
+
+headers = {"Authorization": "Bearer TOKEN"}
+
+# Remove a vote
+resp = requests.post(
+    "http://localhost:8000/vote/",
+    json={"post_id": 42, "dir": 0},
+    headers=headers
+)
+print(resp.json())  # {"message": "successfully deleted vote"}
+```
+
+</CodeGroup>
+
+---
+
+<Tip>
+  **Vote counts in posts** — The current vote count for each post is included in post responses. When you fetch posts via `GET /posts/` or `GET /posts/{id}`, the `vote` field on the `PostOut` response object reflects the total number of votes that post has received.
+</Tip>

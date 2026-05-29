@@ -1,0 +1,176 @@
+---
+title: "GET /posts/ — list posts with vote counts and search"
+sidebarTitle: "GET /posts/"
+description: "GET /posts/ returns a paginated list of posts with aggregated vote counts. Supports Limit, skip, and search query parameters. Requires JWT authentication."
+---
+
+The `GET /posts/` endpoint returns a paginated list of all posts, each enriched with an aggregated vote count. You can narrow results by filtering on post title and control the number of results returned via the `Limit` and `skip` parameters. All requests must include a valid JWT Bearer token.
+
+## Endpoint
+
+```
+GET /posts/
+```
+
+**Authentication required** — include a Bearer token in the `Authorization` header.
+
+## Query Parameters
+
+<ParamField query="Limit" type="integer" default={10}>
+  Maximum number of posts to return in a single response. Defaults to `10`.
+</ParamField>
+
+<ParamField query="skip" type="integer" default={0}>
+  Number of posts to skip before returning results. Use together with `Limit` to paginate through the full list of posts. Defaults to `0`.
+</ParamField>
+
+<ParamField query="search" type="string" default="">
+  Case-insensitive substring filter applied to the post `title`. Only posts whose title contains this string are returned. Defaults to an empty string (no filter applied).
+</ParamField>
+
+## Response
+
+**HTTP 200 OK** — Returns an array of `PostOut` objects.
+
+<ResponseField name="[]" type="array">
+  Array of post objects, each containing a nested `Post` and a `vote` count.
+
+  <Expandable title="PostOut object">
+    <ResponseField name="Post" type="object">
+      The full post record.
+
+      <Expandable title="Post fields">
+        <ResponseField name="id" type="integer">
+          Unique numeric identifier for the post.
+        </ResponseField>
+
+        <ResponseField name="title" type="string">
+          Title of the post.
+        </ResponseField>
+
+        <ResponseField name="content" type="string">
+          Body/content of the post.
+        </ResponseField>
+
+        <ResponseField name="published" type="boolean">
+          Whether the post is published. Defaults to `true`.
+        </ResponseField>
+
+        <ResponseField name="created_at" type="string (datetime)">
+          ISO 8601 timestamp of when the post was created.
+        </ResponseField>
+
+        <ResponseField name="owner" type="object">
+          The user who owns the post.
+
+          <Expandable title="Owner fields">
+            <ResponseField name="id" type="integer">
+              Unique numeric ID of the owner.
+            </ResponseField>
+
+            <ResponseField name="email" type="string">
+              Email address of the owner.
+            </ResponseField>
+
+            <ResponseField name="created_at" type="string (datetime)">
+              ISO 8601 timestamp of when the owner account was created.
+            </ResponseField>
+          </Expandable>
+        </ResponseField>
+      </Expandable>
+    </ResponseField>
+
+    <ResponseField name="vote" type="integer">
+      Total number of votes this post has received.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+## Error Responses
+
+| Status Code | Description |
+|-------------|-------------|
+| `401 Unauthorized` | No token was provided or the token is invalid/expired. |
+
+## Examples
+
+<CodeGroup>
+
+```bash cURL
+# Get the first 10 posts (default)
+curl -H "Authorization: Bearer TOKEN" \
+  http://localhost:8000/posts/
+
+# Get the next page (posts 11–15)
+curl -H "Authorization: Bearer TOKEN" \
+  "http://localhost:8000/posts/?skip=10&Limit=5"
+
+# Search posts by title keyword
+curl -H "Authorization: Bearer TOKEN" \
+  "http://localhost:8000/posts/?search=hello"
+```
+
+```python Python
+import requests
+
+BASE_URL = "http://localhost:8000"
+HEADERS = {"Authorization": "Bearer TOKEN"}
+
+# Get the first 10 posts (default)
+response = requests.get(f"{BASE_URL}/posts/", headers=HEADERS)
+
+# Get the next page (posts 11–15)
+response = requests.get(
+    f"{BASE_URL}/posts/",
+    headers=HEADERS,
+    params={"skip": 10, "Limit": 5}
+)
+
+# Search posts by title keyword
+response = requests.get(
+    f"{BASE_URL}/posts/",
+    headers=HEADERS,
+    params={"search": "hello"}
+)
+
+print(response.json())
+```
+
+</CodeGroup>
+
+### Successful Response Example
+
+```json
+[
+  {
+    "Post": {
+      "id": 1,
+      "title": "Hello World",
+      "content": "This is my first post.",
+      "published": true,
+      "created_at": "2024-01-15T10:30:00.000000Z",
+      "owner": {
+        "id": 3,
+        "email": "alice@example.com",
+        "created_at": "2024-01-01T08:00:00.000000Z"
+      }
+    },
+    "vote": 5
+  },
+  {
+    "Post": {
+      "id": 2,
+      "title": "Hello Again",
+      "content": "Another post here.",
+      "published": true,
+      "created_at": "2024-01-16T14:00:00.000000Z",
+      "owner": {
+        "id": 7,
+        "email": "bob@example.com",
+        "created_at": "2024-01-02T09:00:00.000000Z"
+      }
+    },
+    "vote": 2
+  }
+]
+```

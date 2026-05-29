@@ -1,0 +1,92 @@
+---
+title: "POST /login — authenticate and get a JWT access token"
+sidebarTitle: "POST /login"
+description: "POST /login authenticates a user with email and password and returns a JWT bearer token. Uses OAuth2 password flow with form-encoded credentials."
+---
+
+The `/login` endpoint authenticates a registered user and returns a signed JWT access token. It follows the **OAuth2 password flow**: credentials are submitted as form-encoded data (not JSON), using FastAPI's built-in `OAuth2PasswordRequestForm`. The returned `access_token` must be included in the `Authorization: Bearer` header for all protected routes.
+
+## Endpoint
+
+```
+POST /login
+```
+
+No authentication is required. This is the entry point for obtaining a token.
+
+## Request
+
+**Content-Type:** `application/x-www-form-urlencoded`
+
+The request body must be form-encoded. Note that the field is named `username` per the OAuth2 specification, but it must contain the user's **email address** — this is the value looked up against the `email` column in the `users` table.
+
+<ParamField body="username" type="string" required>
+  The user's email address (e.g. `user@example.com`). Despite the OAuth2 field name `username`, this value is matched against the `email` column in the database.
+</ParamField>
+
+<ParamField body="password" type="string" required>
+  The user's plaintext password. The API verifies this against the stored bcrypt hash. Always transmit over HTTPS in production.
+</ParamField>
+
+## Response
+
+**HTTP 200 OK**
+
+The response body is a JSON object matching the `Token` schema (`app/schemas.py`):
+
+<ResponseField name="access_token" type="string">
+  The signed JWT bearer token to include in the `Authorization` header of subsequent requests. The payload contains `user_id` (the authenticated user's integer ID) and `exp` (the UTC expiry timestamp).
+</ResponseField>
+
+<ResponseField name="token_type" type="string">
+  Always `"bearer"`. Use this value literally when constructing the `Authorization` header.
+</ResponseField>
+
+## Error responses
+
+| Status | Detail | Cause |
+|---|---|---|
+| 403 Forbidden | `"Invalid Credentials"` | No user exists with the supplied email, or the password does not match the stored bcrypt hash. |
+
+The same `"Invalid Credentials"` message is returned for both a missing user and a wrong password — this is intentional to avoid leaking whether a given email address is registered.
+
+## Examples
+
+<CodeGroup>
+
+```bash cURL
+curl -X POST http://localhost:8000/login \
+  -d 'username=user@example.com&password=securepassword'
+```
+
+```python Python
+import requests
+
+response = requests.post(
+    "http://localhost:8000/login",
+    data={"username": "user@example.com", "password": "securepassword"}
+)
+token = response.json()["access_token"]
+```
+
+</CodeGroup>
+
+## Successful response example
+
+```json
+{
+  "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "token_type": "bearer"
+}
+```
+
+## Using the token
+
+Pass the `access_token` value in the `Authorization` header as a Bearer token on every subsequent request that requires authentication:
+
+```bash
+curl -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." \
+  http://localhost:8000/posts/
+```
+
+FastAPI validates the token on each protected route via the `get_current_user` dependency (`app/oauth2.py`), which decodes the JWT, extracts the `user_id` claim, and fetches the corresponding user record from the database. If the token is missing, expired, or invalid, the server responds with `401 Unauthorized` and the detail `"Could not validate credentials"`.

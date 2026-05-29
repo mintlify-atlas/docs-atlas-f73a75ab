@@ -1,0 +1,81 @@
+---
+title: "GET /users/{id} — fetch a user profile by ID"
+sidebarTitle: "GET /users/{id}"
+description: "GET /users/{id} retrieves a user's public profile by their integer ID. Returns id, email, and created_at. No authentication required."
+---
+
+This endpoint retrieves a user's public profile by their numeric ID. Given a valid integer user ID, it returns the matching account's `id`, `email`, and `created_at` timestamp. No authentication token is required to look up a user profile. If no user exists for the provided ID, the endpoint returns a `404 Not Found` error.
+
+## Endpoint
+
+```
+GET /users/{id}
+```
+
+Authentication is **not required** for this endpoint.
+
+## Path Parameters
+
+<ParamField path="id" type="integer" required>
+  The unique numeric ID of the user to retrieve. This corresponds to the auto-generated primary key assigned when the account was created. Must be a positive integer — passing a non-integer value will result in a `422 Unprocessable Entity` response.
+</ParamField>
+
+## Response
+
+A successful request returns HTTP **200 OK** with the user's profile.
+
+<ResponseField name="id" type="integer">
+  The user's unique auto-generated integer ID, as assigned by the database at registration time.
+</ResponseField>
+
+<ResponseField name="email" type="string">
+  The email address associated with the user's account.
+</ResponseField>
+
+<ResponseField name="created_at" type="string">
+  ISO 8601 timestamp (with timezone) indicating when the account was originally created. Example: `"2024-01-15T10:30:00.000000+00:00"`.
+</ResponseField>
+
+## Error Responses
+
+| Status Code | Detail Message | Cause |
+|---|---|---|
+| `404 Not Found` | `"User with id: {id} does not exists"` | No user record was found in the database for the given ID. |
+| `422 Unprocessable Entity` | *(Pydantic validation error)* | The `id` path parameter could not be parsed as an integer. |
+
+## Examples
+
+<CodeGroup>
+
+```bash curl
+curl http://localhost:8000/users/1
+```
+
+```python Python
+import requests
+
+response = requests.get("http://localhost:8000/users/1")
+user = response.json()
+print(user["email"])       # e.g. "alice@example.com"
+print(user["created_at"])  # e.g. "2024-01-15T10:30:00.000000+00:00"
+```
+
+</CodeGroup>
+
+### Successful Response — 200 OK
+
+```json
+{
+  "id": 1,
+  "email": "alice@example.com",
+  "created_at": "2024-01-15T10:30:00.000000+00:00"
+}
+```
+
+### Error Response — 404 Not Found
+
+```json
+{
+  "detail": "User with id: 99 does not exists"
+}
+```

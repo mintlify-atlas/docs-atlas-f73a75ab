@@ -1,0 +1,145 @@
+---
+title: "Deploy Social Media Backend to Render.com"
+sidebarTitle: "Render Deployment"
+description: "Deploy the Social Media Backend API and a managed PostgreSQL database to Render.com using the included render.yaml Blueprint configuration file."
+---
+
+The repository ships with a `render.yaml` Blueprint file that lets you provision both the FastAPI web service and a managed PostgreSQL database on Render.com in a single click. No manual service configuration is required — Render reads the Blueprint and creates every resource with the correct settings, environment variables, and inter-service wiring automatically.
+
+## What render.yaml configures
+
+The `render.yaml` file at the root of the project defines the full infrastructure for the application:
+
+```yaml
+databases:
+  - name: fastapi-db
+    databaseName: fastapi_tutorial
+    user: fastapi_user
+    plan: free # Free tier: 1 GB storage, expires after 90 days
+    ipAllowList: [] # Allow connections from any IP
+
+services:
+  - type: web
+    name: fastapi-tutorial
+    runtime: python
+    plan: free # Free tier: 512 MB RAM, spins down after 15 min inactivity
+    buildCommand: "pip install uv && uv sync"
+    startCommand: "uv run uvicorn app.main:app --host 0.0.0.0 --port $PORT"
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.14
+      - key: DATABASE_URL
+        fromDatabase:
+          name: fastapi-db
+          property: connectionString
+```
+
+Here is what each section does:
+
+**`databases` block**
+
+Provisions a free-tier PostgreSQL instance on Render with:
+- **Instance name:** `fastapi-db` (used internally to reference the database from services)
+- **Database name:** `fastapi_tutorial`
+- **Database user:** `fastapi_user`
+- **Plan:** `free` — 1 GB storage, expires after 90 days
+- **`ipAllowList: []`** — allows inbound connections from any IP address, which is required for the web service to reach the database
+
+**`services` block**
+
+Provisions a Python web service with:
+- **Build command:** `pip install uv && uv sync` — installs `uv` and then uses it to install all dependencies declared in `pyproject.toml`
+- **Start command:** `uv run uvicorn app.main:app --host 0.0.0.0 --port $PORT` — Render injects the `$PORT` variable automatically; the application binds to it
+- **Python version:** `3.14`, pinned via the `PYTHON_VERSION` environment variable
+
+**`DATABASE_URL` wiring**
+
+The `fromDatabase` directive automatically injects the PostgreSQL connection string from `fastapi-db` into the `DATABASE_URL` environment variable of the web service. Render resolves this at deploy time, so there is no need to copy and paste connection strings manually.
+
+<Note>
+  The application's `app/database.py` constructs its SQLAlchemy URL from individual `DATABASE_*` variables, not from `DATABASE_URL`. After deployment you will need to supply those individual variables (see step 6 below), or adapt `database.py` to read from `DATABASE_URL` directly.
+</Note>
+
+## Deployment steps
+
+<Steps>
+  <Step title="Push the repository to GitHub">
+    Render deploys from a connected Git repository. Fork the project or push it to a GitHub repository under your own account:
+
+    ```bash
+    git remote set-url origin https://github.com/YOUR_USERNAME/Social-Media-Backend.git
+    git push -u origin main
+    ```
+  </Step>
+
+  <Step title="Create a Render account">
+    Sign up for a free account at [render.com](https://render.com) if you do not already have one. No credit card is required for the free tier.
+  </Step>
+
+  <Step title="Create a new Blueprint deployment">
+    In the Render dashboard, click **New** in the top navigation bar, then select **Blueprint** from the dropdown menu.
+  </Step>
+
+  <Step title="Connect your GitHub repository">
+    Authorize Render to access your GitHub account and select the repository that contains `render.yaml`. Render will scan the repository root for the Blueprint file.
+  </Step>
+
+  <Step title="Review and apply the Blueprint">
+    Render detects `render.yaml` and displays a summary of the resources it will create:
+    - 1 PostgreSQL database (`fastapi-db`)
+    - 1 web service (`fastapi-tutorial`)
+
+    Review the list, then click **Apply** to begin provisioning. Render will build the service and start the database in parallel.
+  </Step>
+
+  <Step title="Set additional environment variables">
+    The Blueprint wires `DATABASE_URL` automatically, but the following variables must be added manually in the Render dashboard under **Environment** for the `fastapi-tutorial` service:
+
+    | Variable | Example value | Description |
+    |---|---|---|
+    | `DATABASE_HOSTNAME` | `dpg-xxx.oregon-postgres.render.com` | Hostname from the Render database info page |
+    | `DATABASE_PORT` | `5432` | PostgreSQL port |
+    | `DATABASE_USERNAME` | `fastapi_user` | Database user defined in `render.yaml` |
+    | `DATABASE_PASSWORD` | *(from Render DB page)* | Auto-generated by Render |
+    | `DATABASE_NAME` | `fastapi_tutorial` | Database name defined in `render.yaml` |
+    | `SECRET_KEY` | `a-long-random-string` | Used to sign JWT tokens |
+    | `ALGORITHM` | `HS256` | JWT signing algorithm |
+    | `ACCESS_TOKEN_EXPIRE_MINUTES` | `60` | Token lifetime in minutes |
+
+    <Tip>
+      You can find the individual database credentials on the Render dashboard under **Databases → fastapi-db → Info**.
+    </Tip>
+  </Step>
+
+  <Step title="Render builds and deploys automatically">
+    After saving the environment variables, Render triggers a new deploy. Monitor progress in the **Logs** tab of the `fastapi-tutorial` service. A successful deploy ends with a log line from Uvicorn confirming the server is running.
+
+    Once deployed, your API is available at the URL shown in the service dashboard (e.g., `https://fastapi-tutorial.onrender.com`).
+  </Step>
+</Steps>
+
+## Run database migrations after deployment
+
+The Blueprint does not run Alembic migrations automatically. After the first successful deploy, run the migrations using the Render **Shell** feature:
+
+1. In the Render dashboard, open the `fastapi-tutorial` service.
+2. Click the **Shell** tab to open an interactive terminal inside the running container.
+3. Run:
+
+```bash
+alembic upgrade head
+```
+
+This creates all tables (`posts`, `users`, `votes`) in the `fastapi_tutorial` database.
+
+## Important notes
+
+<Warning>
+  **Free tier limitations:** Render's free PostgreSQL database **expires and is deleted after 90 days**. Export your data before the expiry date if you need to keep it. The free web service **spins down after 15 minutes of inactivity** — the first request after a period of no traffic will incur a cold start delay of up to 30 seconds while the service wakes up.
+</Warning>
+
+- **`DATABASE_URL` is automatically injected** — the `fromDatabase` directive in `render.yaml` wires the full PostgreSQL connection string from `fastapi-db` into the web service at build time. You do not need to copy it manually.
+
+- **Automatic redeploys** — once connected, Render redeploys the service automatically on every push to the configured branch (default: `main`). Each redeploy runs `uv sync` to pick up any new dependencies.
+
+- **Zero-downtime deploys** — on paid plans, Render performs rolling deploys. On the free plan, there is a brief downtime window during each redeploy.
